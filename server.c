@@ -5,13 +5,25 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <strings.h>
+#include <string.h>
 
 void error(char *msg) {
     perror(msg);
     exit(1);
 }
 
+// function for setting the http header
+void setHttpHeader(char httpHeader[]) {
+    FILE *htmlData = fopen("index.html", "r");
 
+    char line[100];
+    char responseData[8000];
+    while (fgets(line, 100, htmlData) != 0) {
+        strcat(responseData, line);
+    }
+
+    strcat(httpHeader, responseData);
+}
 
 int main(int argc, char *argv[]) {
     // socket file descriptor, new socket fd, port number to accept connections on, client address size, return value for write(), read()
@@ -61,6 +73,9 @@ int main(int argc, char *argv[]) {
     if (n < 0)
         error("Unable to start listening, exiting...");
     
+    setHttpHeader(httpHeader);
+    int clisock;
+
     // let's serve forever
     while(1) {
         // structure size
@@ -70,7 +85,6 @@ int main(int argc, char *argv[]) {
         newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (newsockfd < 0)
             error("Unable to accept connection, exiting...");
-
         // below code will only execute after a connection is established
         // initialize and then zero-out the buffer for chars from sock conn
         bzero(buffer, 256);
@@ -82,9 +96,11 @@ int main(int argc, char *argv[]) {
         printf("Buffer: \n%s\n", buffer);
 
         // send a http "OK" code to client
-        n = write(newsockfd, "200", 3);
+        n = send(newsockfd, httpHeader, sizeof(httpHeader), 0);
         if (n < 0)
-            error("Unable to write to socket, exiting...");
+            error("Unable to send to socket, exiting...");
+
+        close(newsockfd);
     }
     return 0;
 }
