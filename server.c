@@ -13,15 +13,47 @@ void error(char *msg) {
 }
 
 // function for setting the http header
-void setHttpHeader(char httpHeader[]) {
-    FILE *htmlData = fopen("index.html", "r");
+void setHttpHeader(char httpHeader[], int code, char *uri) {
+    // uri "/" -> "/index.html"
+    if (strlen(uri) <= 1)
+        uri = "/index.html";
+    
+    // uri "/***" -> "./***"
+    char filepath[100] = ".";
+    strcat(filepath, uri);
 
+    // try to open the file
+    FILE *htmlData = fopen(filepath, "r");
+    if (!htmlData) {
+        htmlData = fopen("404.html", "r");
+    }
+
+    char *headertext;
+    char *headercode;
     char line[100];
     char responseData[8000];
+
+    // clear our buffer so we don't send the same stuff over and over again
+    memset(responseData, 0, sizeof(responseData));
+
     while (fgets(line, 100, htmlData) != 0) {
         strcat(responseData, line);
     }
+    
+    fclose(htmlData);
 
+    if (code == 404) {
+        headercode = "404 Not Found";
+    } else if (code == 405) {
+        headercode = "405 Method Not Allowed";
+    } else {
+        headercode = "200 OK";
+    }
+
+    headertext = "HTTP/1.1 200 OK\r\n\n";
+    //strcat(headertext, headercode);
+
+    strcat(httpHeader, headertext);
     strcat(httpHeader, responseData);
 }
 
@@ -42,8 +74,6 @@ int main(int argc, char *argv[]) {
         *argv[1] = 80;
         // error("No port provided, exiting...");
     }
-    
-    char httpHeader[8000] = "HTTP/1.1 200 OK\r\n\n";
 
     // create a socket on the socket file descriptor variable
     // AF_INET - socket address domain, SOCK_STREAM - socket type (stream/datagram), 0 - protocol (0 makes the OS choose between TCP and UDP)
@@ -73,11 +103,12 @@ int main(int argc, char *argv[]) {
     if (n < 0)
         error("Unable to start listening, exiting...");
     
-    setHttpHeader(httpHeader);
     int clisock;
 
     // let's serve forever
     while(1) {
+        char httpHeader[8000] = "";
+
         // structure size
         clilen = sizeof(cli_addr);
 
@@ -92,10 +123,20 @@ int main(int argc, char *argv[]) {
         n = read(newsockfd, buffer, 255);
         if (n < 0)
             error("Unable to read from socket, exiting...");
+        
+        // not needed anymore i guess
+        // printf("\n%s\n", buffer);
 
-        printf("\n%s\n", buffer);
+        // parsing requests into method, uri and protocol
+        char *method = strtok(buffer, " \t\r\n");
+        char *uri    = strtok(NULL,   " \t");
+        char *prot   = strtok(NULL,   " \t\r\n");
 
-        // send a http "OK" code to client
+        fprintf(stderr, "%s %s %s\n", method, uri, prot);
+
+        setHttpHeader(httpHeader, 200, uri);
+
+        // send the response to client
         n = send(newsockfd, httpHeader, sizeof(httpHeader), 0);
         if (n < 0)
             error("Unable to send to socket, exiting...");
