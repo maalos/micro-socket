@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
         if (n < 0)
             error("Unable to read from socket, exiting...");
 
-        printf("Buffer: \n%s\n", buffer);
+        printf("\n%s\n", buffer);
 
         // send a http "OK" code to client
         n = send(newsockfd, httpHeader, sizeof(httpHeader), 0);
