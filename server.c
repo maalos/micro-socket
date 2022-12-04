@@ -3,13 +3,23 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <unistd.h>
 #include <strings.h>
 #include <string.h>
 
+static volatile int keepRunning = 1;
+
 void error(char *msg) {
     perror(msg);
-    exit(1);
+    keepRunning = 0;
+}
+
+// function for handling ctrl-c press
+void signalHandler(int sig) {
+    signal(sig, SIG_IGN);
+    printf("\nControl-C press detected. The server will serve one last time and then shutdown\n");
+    keepRunning = 0;
 }
 
 // function for setting the http header
@@ -58,6 +68,9 @@ void setHttpHeader(char httpHeader[], int code, char *uri) {
 }
 
 int main(int argc, char *argv[]) {
+    // Setup a Control-C handler so that we can shutdown the server in such case
+    signal(SIGINT, signalHandler);
+    
     // socket file descriptor, new socket fd, port number to accept connections on, client address size, return value for write(), read()
     int sockfd, newsockfd, portno, clilen, n;
 
@@ -70,9 +83,12 @@ int main(int argc, char *argv[]) {
     // structure containing the internet address
     struct sockaddr_in serv_addr, cli_addr;
 
+    // set the port number to the first argument as int. If no port number provided, default to 80
     if (argc < 2) {
-        *argv[1] = 80;
+        portno = 80;
         // error("No port provided, exiting...");
+    } else {
+        portno = atoi(argv[1]);
     }
 
     // create a socket on the socket file descriptor variable
@@ -84,8 +100,6 @@ int main(int argc, char *argv[]) {
     // zero-out the buffer, first arg is a pointer to a buffer, second arg is it's size
     bzero((char *) &serv_addr, sizeof(serv_addr));
 
-    // set the port number to the first argument as int
-    portno = atoi(argv[1]);
 
     // set the structure's fields
     serv_addr.sin_family      = AF_INET; // should always be set to sym const AF_INET
@@ -106,7 +120,7 @@ int main(int argc, char *argv[]) {
     int clisock;
 
     // let's serve forever
-    while(1) {
+    while(keepRunning) {
         char httpHeader[8000] = "";
 
         // structure size
@@ -143,5 +157,7 @@ int main(int argc, char *argv[]) {
 
         close(newsockfd);
     }
+    shutdown(sockfd, SHUT_RDWR);
+    printf("Successfully shutdown server\n");
     return 0;
 }
